@@ -10,9 +10,10 @@
     New quests are tracked automatically (an option). The stock QuestWatchFrame stays hidden
     while the tracker is on.
 
-    Look: a parchment page in a dark iron frame with filigree corners, a gold rule over the
-    header, a green ! by "Quests", red seals by each quest (a shield once it is done) and dark ink
-    for the objectives. Art: Interface\ClassicPlus\Quests_*.blp; without it the tracker keeps the
+    Look: a dimmed parchment page in a dark iron frame with filigree corners, a gold rule over the
+    header, a green ! by "Quests", red seals by each quest (a shield once it is done). Text as the
+    stock quest tracker: yellow quest titles, light objectives, green when done, all with a dark
+    shadow (dark ink on the parchment was unreadable in the game, where the page renders darker). Art: Interface\ClassicPlus\Quests_*.blp; without it the tracker keeps the
     plain dark panel.
 ]]--
 
@@ -21,10 +22,10 @@ local UI = W.UI
 local Q = Compass
 
 local WIDTH = 262
-local INK = { 0.16, 0.10, 0.04 }          -- objectives
-local TITLE = { 0.34, 0.17, 0.02 }        -- quest titles, a deep brown that reads on parchment
-local DONE = { 0.12, 0.50, 0.12 }         -- "Done" and ready-to-turn-in lines
-local FAIL = { 0.62, 0.12, 0.08 }
+local INK = { 0.95, 0.92, 0.85 }          -- objectives and counts: light, as the stock tracker
+local TITLE = { 1, 0.82, 0 }              -- quest titles: the stock tracker's yellow
+local DONE = { 0.45, 1, 0.45 }            -- "Done" and ready-to-turn-in lines
+local FAIL = { 1, 0.35, 0.3 }
 local ROW_H, LINE_H = 18, 14
 
 local tracker = CreateFrame("Frame", "Compass_Tracker", UIParent)
@@ -45,6 +46,7 @@ parch:SetPoint("TOPLEFT", tracker, "TOPLEFT", 6, -6)
 parch:SetPoint("BOTTOMRIGHT", tracker, "BOTTOMRIGHT", -6, 6)
 local skinned = W:Art(parch, "Quests_Parchment", nil)
 tracker.skinned = skinned
+if skinned then parch:SetVertexColor(0.55, 0.5, 0.45) end   -- dimmed, so light text stands out
 local C, CS = 40 / 256, 26       -- slice in the art, corner size on screen
 local function piece(l, r, t, b)
     local x = tracker:CreateTexture(nil, "BORDER")
@@ -70,12 +72,12 @@ else
     tracker:SetBackdropBorderColor(UI.EDGE[1], UI.EDGE[2], UI.EDGE[3], 0.45)
 end
 
--- A label on the parchment: a game font, the colour, and a pale shadow that reads as engraving.
+-- A label on the parchment: a game font, the colour, and a dark shadow so it reads on any page.
 local function ink(fs, font, size, color, light)
     if skinned and fs.SetFont then fs:SetFont(font, size) end
     if skinned then
         fs:SetTextColor(color[1], color[2], color[3])
-        if fs.SetShadowColor then fs:SetShadowColor(1, 0.95, 0.82, light and 0.55 or 0) end
+        if fs.SetShadowColor then fs:SetShadowColor(0, 0, 0, light and 1 or 0.8) end
         if fs.SetShadowOffset then fs:SetShadowOffset(1, -1) end
     end
 end
@@ -125,20 +127,19 @@ end
 local headText = UI.Label(head, 11, UI.ACCENT, skinned and nil or "OUTLINE")
 headText:SetPoint("LEFT", headIcon, "RIGHT", 4, 0)
 headText:SetText("Quests")
--- "Quests" in the quest log's Friz Quadrata, dark ink with a pale engraved shadow (it sits on the
--- parchment itself)
+-- "Quests" in the quest log's Friz Quadrata, gold with a dark shadow
 if skinned then
     if headText.SetFont then headText:SetFont(FRIZ, 15) end
-    headText:SetTextColor(0.22, 0.12, 0.03)
-    if headText.SetShadowColor then headText:SetShadowColor(1, 0.95, 0.82, 0.6); headText:SetShadowOffset(1, -1) end
+    headText:SetTextColor(TITLE[1], TITLE[2], TITLE[3])
+    if headText.SetShadowColor then headText:SetShadowColor(0, 0, 0, 1); headText:SetShadowOffset(1, -1) end
 end
 local headCount = UI.Label(head, 10, UI.MUTED, skinned and nil or "OUTLINE")
 headCount:SetPoint("RIGHT", head, "RIGHT", skinned and -28 or -18, 0)
--- the count: the same ink, a little lighter, a quieter partner to the "Quests" title
+-- the count: light, a quieter partner to the "Quests" title
 if skinned then
     if headCount.SetFont then headCount:SetFont(FRIZ, 12) end
-    headCount:SetTextColor(0.30, 0.20, 0.09)
-    if headCount.SetShadowColor then headCount:SetShadowColor(1, 0.95, 0.82, 0.6); headCount:SetShadowOffset(1, -1) end
+    headCount:SetTextColor(INK[1], INK[2], INK[3])
+    if headCount.SetShadowColor then headCount:SetShadowColor(0, 0, 0, 1); headCount:SetShadowOffset(1, -1) end
 end
 if skinned then
     headCount:SetWidth(120)
@@ -267,7 +268,7 @@ more:SetHeight(14)
 more:SetWidth(WIDTH - 10)
 more.text = UI.Label(more, 10, UI.MUTED, nil)
 more.text:SetPoint("LEFT", more, "LEFT", 4, 0)
-ink(more.text, FRIZ, 11, { 0.35, 0.25, 0.12 }, true)
+ink(more.text, FRIZ, 11, { 0.8, 0.78, 0.72 }, true)
 more:SetScript("OnClick", function() Q.Log:Open() end)
 
 -- Right-click menu for a quest (tracker and quest log share it).
@@ -344,11 +345,7 @@ function Q:UpdateTracker()
             r.label:SetPoint("LEFT", pinned and r.pin or r.toggle, "RIGHT", 3, 0)
             r.label:SetText("[" .. q.level .. "] " .. q.title)
             if skinned then
-                -- difficulty in ink: a yellow (even-level) quest is the engraved gold-brown, the rest
-                -- their own colour darkened so it reads on parchment
-                local dr, dg, db = self:DiffColor(q.level)
-                if dr > 0.95 and dg > 0.75 and db < 0.3 then r.label:SetTextColor(TITLE[1], TITLE[2], TITLE[3])
-                else r.label:SetTextColor(dr * 0.5, dg * 0.5, db * 0.5) end
+                r.label:SetTextColor(TITLE[1], TITLE[2], TITLE[3])   -- yellow, as the stock tracker
             else
                 r.label:SetTextColor(self:DiffColor(q.level))
             end
