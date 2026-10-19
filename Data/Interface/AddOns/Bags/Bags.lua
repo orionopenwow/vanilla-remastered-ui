@@ -85,6 +85,55 @@ bankBtn:SetScript("OnEnter", function()
 end)
 bankBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
+-- The stock window look, whatever the skin: the dialog border and dark stone, the gold title in
+-- the top edge (no plaque above it), the red X in the corner and "Bank" at the top left, like the
+-- stock Items (loot) window. The lanes, search and slots keep their own styling.
+local STOCK_BACKDROP = {
+    bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
+    edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+    tile = true, tileSize = 32, edgeSize = 24,
+    insets = { left = 6, right = 6, top = 6, bottom = 6 },
+}
+function V:PaintStock()
+    local f = frame
+    f:SetBackdrop(STOCK_BACKDROP)
+    f:SetBackdropColor(1, 1, 1, 1)
+    f:SetBackdropBorderColor(1, 1, 1, 1)
+    if f.titleBar then f.titleBar:SetTexture(nil) end
+    if f.titleRule then f.titleRule:Hide() end
+    if f.header then f.header:Hide() end
+    for _, c in ipairs(f.corners or {}) do c:Hide() end
+    if f.icon then f.icon:Hide() end
+    if f.chrome then f.chrome:Hide() end
+    local t = f.title
+    t:ClearAllPoints()
+    t:SetPoint("TOP", f, "TOP", 0, -13)
+    if t.SetFont then t:SetFont("Fonts\\FRIZQT__.TTF", 12) end
+    t:SetTextColor(1, 0.82, 0)
+    if t.SetShadowColor then t:SetShadowColor(0, 0, 0, 1); t:SetShadowOffset(1, -1) end
+    local cb = f.closeButton
+    if cb then
+        cb:ClearAllPoints()
+        cb:SetWidth(28); cb:SetHeight(28)
+        cb:SetPoint("TOPRIGHT", f, "TOPRIGHT", -1, -1)
+        if cb.SetNormalTexture then
+            cb:SetNormalTexture("Interface\\Buttons\\UI-Panel-MinimizeButton-Up")
+            cb:SetPushedTexture("Interface\\Buttons\\UI-Panel-MinimizeButton-Down")
+            cb:SetHighlightTexture("Interface\\Buttons\\UI-Panel-MinimizeButton-Highlight", "ADD")
+        end
+    end
+    bankBtn:ClearAllPoints()
+    bankBtn:SetPoint("TOPLEFT", f, "TOPLEFT", 12, -11)
+    bankTxt:SetTextColor(1, 0.82, 0)
+    local h = f.dragHandle
+    if h then
+        h:ClearAllPoints()
+        h:SetPoint("TOPLEFT", f, "TOPLEFT", 56, -6)
+        h:SetPoint("BOTTOMRIGHT", f, "TOPRIGHT", -30, -26)
+    end
+end
+UI.OnSkin(function() V:PaintStock() end)
+
 -- search box
 local search = CreateFrame("EditBox", "Vault_Search", frame)
 search:SetHeight(18)

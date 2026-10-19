@@ -890,6 +890,10 @@ function UI.ClassicTabs(parent, opts)
         if sel then b.text:SetTextColor(1, 1, 1) else b.text:SetTextColor(1, 0.82, 0) end
         if sel then b:SetFrameLevel(parent:GetFrameLevel() + 3) else b:SetFrameLevel(parent:GetFrameLevel() + 1) end
         b.dot:SetAlpha((b.unread and not sel) and 1 or 0)
+        -- the glow only on the chosen tab or under the mouse (drawn and hidden by hand: a texture on
+        -- the HIGHLIGHT layer showed on every tab in the game clients)
+        if sel or b.hover then b.hl:Show() else b.hl:Hide() end
+        b.hl:SetAlpha(sel and 0.55 or 0.85)
     end
 
     local function make(i)
@@ -907,11 +911,14 @@ function UI.ClassicTabs(parent, opts)
         b.m:SetPoint("TOPLEFT", b.l, "TOPRIGHT", 0, 0)
         b.m:SetPoint("BOTTOMRIGHT", b.r, "BOTTOMLEFT", 0, 0)
         b.m:SetTexCoord(0.15625, 0.84375, 0, 1)
-        b.hl = b:CreateTexture(nil, "HIGHLIGHT")
+        b.hl = b:CreateTexture(nil, "ARTWORK")
         b.hl:SetTexture(TAB_HILITE)
         b.hl:SetBlendMode("ADD")
         b.hl:SetPoint("TOPLEFT", b, "TOPLEFT", 10, 2)
         b.hl:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", -10, 2)
+        b.hl:Hide()
+        b:SetScript("OnEnter", function() this.hover = true; paint(this) end)
+        b:SetScript("OnLeave", function() this.hover = nil; paint(this) end)
         b.text = b:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         b.dot = b:CreateTexture(nil, "OVERLAY")
         b.dot:SetWidth(6); b.dot:SetHeight(6)

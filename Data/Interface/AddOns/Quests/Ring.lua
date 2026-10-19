@@ -131,7 +131,8 @@ local function remember(f)
         local a, rel, b, x, y = f:GetPoint(i)
         pts[i] = { a, rel, b, x, y }
     end
-    saved[f] = { points = pts, level = f.GetFrameLevel and f:GetFrameLevel() }
+    saved[f] = { points = pts, level = f.GetFrameLevel and f:GetFrameLevel(),
+                 w = f.GetWidth and f:GetWidth(), h = f.GetHeight and f:GetHeight() }
 end
 
 local function restore(f)
@@ -190,6 +191,7 @@ function Q:ApplyMinimapFrame(on)
                 z:SetBackdropColor(0.05, 0.05, 0.06, 0.88)
                 z:SetBackdropBorderColor(0.72, 0.58, 0.30, 1)
             end
+            Q:FitZoneName()
         end
     else
         if MinimapBorder then MinimapBorder:Show() end
@@ -201,11 +203,37 @@ function Q:ApplyMinimapFrame(on)
         local z = MinimapZoneTextButton
         if z then
             restore(z)
+            local sz = saved[z]
+            if sz and sz.w and sz.h then z:SetWidth(sz.w); z:SetHeight(sz.h) end
             if z.SetBackdrop then z:SetBackdrop(nil) end
             if MinimapToggleButton then restore(MinimapToggleButton) end
         end
     end
     return self.stockHidden
+end
+
+-- The zone name's box on the ring: tall enough for the letters (the stock 12 px clipped them) and
+-- as wide as the name, never narrower than the stock box.
+Q.ZONE_BOX_H = 20
+function Q:FitZoneName()
+    local z, t = MinimapZoneTextButton, MinimapZoneText
+    if not z or not self.stockHidden then return end
+    z:SetHeight(self.ZONE_BOX_H)
+    local base = math.max(140, (saved[z] and saved[z].w) or 0)     -- the stock box is 140 wide
+    local w = (t and t.GetStringWidth and t:GetStringWidth()) or 0
+    z:SetWidth(math.max(base, w + 24))
+    if t and t.ClearAllPoints then
+        t:ClearAllPoints()
+        t:SetPoint("CENTER", z, "CENTER", 0, 0)
+        if t.SetWidth then t:SetWidth(math.max(base, w + 24) - 10) end
+    end
+end
+if Minimap_Update then
+    local origMinimapUpdate = Minimap_Update
+    function Minimap_Update()
+        origMinimapUpdate()
+        Q:FitZoneName()
+    end
 end
 
 -- -- Keep the minimap on screen ------------------------------------------------------------------

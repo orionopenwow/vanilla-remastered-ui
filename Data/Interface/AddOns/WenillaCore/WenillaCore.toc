@@ -16,4 +16,7 @@ Journal.lua
 Defaults.lua
 UnitMenu.lua
 Report.lua
+Bugs.lua
+Support.lua
+Alpha.lua
 Setup.lua

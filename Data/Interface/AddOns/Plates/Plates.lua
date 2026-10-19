@@ -155,14 +155,15 @@ end
 
 -- -- Restyling a plate ---------------------------------------------------------------------
 
--- The frame art: ours (Plate_Frame, 128x16), else the client's own Nameplate-Border tinted grey.
+-- The frame art: ours (Plate_Frame, 128x16), else the client's own Nameplate-Border; both tinted
+-- a dark charcoal grey (the art alone read as pale, flat silver over grass and snow).
 -- Coordinates in art pixels: the three slices' x edges, the bar well's top and height, the level
 -- box's x range and the box's top/bottom overhang past the well.
 P.FRAME_OURS = { art = "Plate_Frame", w = 128, texH = 16, h = 16, y0 = 0, x = { 0, 8, 96, 128 },
-    wellL = 3, wellTop = 3, wellH = 10, box = { 99, 125 }, boxOver = 1 }
+    wellL = 3, wellTop = 3, wellH = 10, box = { 99, 125 }, boxOver = 1, tint = { 0.50, 0.51, 0.56 } }
 P.FRAME_STOCK = { file = "Interface\\Tooltips\\Nameplate-Border", w = 128, texH = 32, h = 16, y0 = 16,
     x = { 0, 6, 104, 128 }, wellL = 4, wellTop = 3, wellH = 8, box = { 107, 126 }, boxOver = 1,
-    tint = { 0.62, 0.63, 0.66 } }
+    tint = { 0.45, 0.46, 0.51 } }
 
 -- Lay the frame round the bar at the bar's current height (it changes with the window size and
 -- the slim bars); only re-anchors when that height changes.
@@ -234,6 +235,8 @@ local function style(plate)
     if W:Art(v.frame[1], P.FRAME_OURS.art, nil) then
         v.frameArt = P.FRAME_OURS
         W:Art(v.frame[2], P.FRAME_OURS.art, nil); W:Art(v.frame[3], P.FRAME_OURS.art, nil)
+        local c = P.FRAME_OURS.tint
+        for i = 1, 3 do v.frame[i]:SetVertexColor(c[1], c[2], c[3]) end
     else
         v.frameArt = P.FRAME_STOCK
         local c = P.FRAME_STOCK.tint
