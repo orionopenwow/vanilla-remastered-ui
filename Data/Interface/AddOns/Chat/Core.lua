@@ -117,7 +117,7 @@ C.SCHEMA = {
         { key = "sticky", label = "Sticky channels", sub = "Whispers, officer, raid and numbered channels stay selected for the next line." },
         { key = "history", label = "Keep 1,000 lines", sub = "A longer scroll-back in every chat tab." },
         { key = "alerts", label = "Guild log-on alerts", sub = "Say when guild members log on and off." },
-        { key = "worldTab", label = "World tab", sub = "Realm-wide World chat (both factions) in a tab of its own. Right-click the tab to hide it." },
+        { key = "worldTab", label = "World tab", sub = "Realm-wide World chat (both factions) in a tab of its own. Right-click the tab for its menu (Hide this tab is there)." },
         { key = "discord", label = "Show Discord messages", sub = "Lines from the realm's Discord #world, marked [D]." },
         { key = "worldJoin", label = "Join World chat", sub = "Be in the World channel on every character. Off leaves it (and stays off)." },
     },
@@ -725,6 +725,9 @@ SlashCmdList["CPCHAT"] = function(msg)
         if C.THEMES[rest] then C:SetOption("theme", rest) end
         W.Print("Chat theme: " .. C:Theme().label .. ". Themes: slate, parchment, midnight, wildwood, glass.")
         return
+    elseif msg == "expand" then
+        if C.OpenExpanded then C:OpenExpanded() end
+        return
     elseif msg == "copy" then
         if C.OpenCopy then C:OpenCopy() end
         return
@@ -738,7 +741,7 @@ SlashCmdList["CPCHAT"] = function(msg)
     end
     local parts = { "guild tab " .. (guildTabShown() and "on" or "off"), "world tab " .. (C:Get("worldTab") and "on" or "off") }
     for _, o in ipairs(C.OPTIONS) do table.insert(parts, o.key .. " " .. (C:On(o.key) and "on" or "off")) end
-    W.Print("Chat: " .. table.concat(parts, ", ") .. ". /cpchat <name> toggles one; /cpchat theme <name>, /cpchat copy, /cpchat settings.")
+    W.Print("Chat: " .. table.concat(parts, ", ") .. ". /cpchat <name> toggles one; /cpchat theme <name>, /cpchat copy, /cpchat expand, /cpchat settings.")
 end
 
 -- -- Registration and events -------------------------------------------------------------------
