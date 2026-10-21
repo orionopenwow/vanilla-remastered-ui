@@ -20,10 +20,18 @@ local floor = math.floor
 local strfind, strsub, strgsub, strlen, strlower, strupper = string.find, string.sub, string.gsub, string.len, string.lower, string.upper
 local tinsert, tremove, getn = table.insert, table.remove, table.getn
 
-local WIDTH, GAP, MAX_ROWS, TOP = 270, 3, 20, 62
+-- 300 px wide (the kit's window at C.S); the panel starts under the header band, the rows under the
+-- column strip; the rows leave room at the right for the scrollbar.
+local WIDTH, GAP, MAX_ROWS = 300, 0, 20
+local TOP = C.BAND_H + 16
+local ROW_X = C.EDGE + 1
+local ROW_W = WIDTH - 2 * ROW_X - C.SCROLL_W - 3
 local MAX_WINDOWS, MAX_TABS = 5, 6
 
+-- Bar colours: Meters (warrior red, the rest the game's colours) or the game's own for every class.
+C.PALETTES = { { value = "meters", label = "Meters" }, { value = "standard", label = "Standard" } }
 C.TEXTURES = {
+    { value = "bronze", label = "Bronze", path = C.ART.fill },
     { value = "glossy", label = "Glossy", path = "Interface\\TargetingFrame\\UI-StatusBar" },
     { value = "flat", label = "Flat", path = "Interface\\Tooltips\\UI-Tooltip-Background" },
     { value = "skills", label = "Skill bar", path = "Interface\\PaperDollInfoFrame\\UI-Character-Skills-Bar" },
@@ -57,7 +65,7 @@ end
 -- 12345 -> "12.3k" or "12,345" (the "Number format" setting)
 function C.Num(n)
     n = tonumber(n) or 0
-    if S("numberFormat", "short") == "full" then
+    if S("numberFormat", "full") == "full" then
         local s = tostring(floor(n + 0.5))
         local k
         repeat s, k = strgsub(s, "^(-?%d+)(%d%d%d)", "%1,%2") until k == 0
@@ -75,8 +83,13 @@ C.Pct = pct
 
 -- -- Layout (saved per character) --------------------------------------------------
 
+-- Damage, DPS, Healing and Deaths side by side, Damage chosen.
+local function defaultTabs()
+    return { { id = 1, mode = "dmg", seg = "current" }, { id = 2, mode = "dps", seg = "current" },
+        { id = 3, mode = "heal", seg = "current" }, { id = 4, mode = "deaths", seg = "current" } }
+end
 local function defaultLayout()
-    return { version = 1, nextTab = 2, windows = { { tabs = { { id = 1, mode = "dmg", seg = "current" } }, active = 1 } } }
+    return { version = 2, nextTab = 5, windows = { { tabs = defaultTabs(), active = 1 } } }
 end
 
 -- Meters_Layout, checked once each time the saved table changes (a new login restores it).
@@ -113,8 +126,18 @@ function C:Layout()
         end
         if wins[1] then
             L.windows = wins
+            -- version 1 started with one Damage tab; a layout nobody changed gets the four tabs
+            local w1 = wins[1]
+            if (tonumber(L.version) or 1) < 2 and not wins[2] and not w1.tabs[2]
+                and w1.tabs[1].mode == "dmg" and not w1.tabs[1].name then
+                local id1 = w1.tabs[1].id
+                w1.tabs = defaultTabs()
+                w1.tabs[1].id = id1
+                for k = 2, 4 do maxId = maxId + 1; w1.tabs[k].id = maxId end
+                w1.active = id1
+            end
             L.nextTab = math.max(tonumber(L.nextTab) or 0, maxId + 1)
-            L.version = 1
+            L.version = 2
         else
             L = nil
         end
@@ -180,24 +203,26 @@ end
 local function styleRow(row)
     local h = clamp(S("barHeight", 18), 12, 28)
     local fs = clamp(S("fontSize", 10), 8, 14)
+    local key = S("barTexture", "bronze")
     local tex = C.TEXTURES[1].path
     for _, t in ipairs(C.TEXTURES) do
-        if t.value == S("barTexture", "glossy") then tex = t.path end
+        if t.value == key then tex = t.path end
     end
     row:SetHeight(h)
-    row.iconBox:SetWidth(h)
-    row.iconBox:SetHeight(h)
-    row.track:SetPoint("TOPLEFT", row, "TOPLEFT", h + 3, 0)
     row.bar:SetStatusBarTexture(tex)
-    UI.Font(row.left, fs, "OUTLINE")
-    UI.Font(row.mid, fs, "OUTLINE")
-    UI.Font(row.right, fs, "OUTLINE")
+    C.LayoutRow(row, h, ROW_W)
+    -- the rounded row font (or Arial Narrow), off-white, a soft shadow (Chrome.lua)
+    C.RowText(row.left, fs)
+    C.RowText(row.mid, fs)
+    C.RowText(row.right, fs)
     row.styledH = h
 end
 
 local function makeRow(f, i)
-    local row = UI.Bar(f, { width = WIDTH - 16, height = 18, icon = true })
+    local row = UI.Bar(f, { width = ROW_W, height = 18, icon = true })
+    C.ChromeRow(row)
     row.mid:SetPoint("RIGHT", row.track, "RIGHT", -86, 0)
+    row.mid:Hide()                      -- the share is in the one right-hand text
     row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     row:SetScript("OnClick", function() C:RowClick(this, arg1) end)
     row:SetScript("OnEnter", function() C:ShowInspect(this, false) end)
@@ -221,28 +246,28 @@ local function makeWindow(i)
     f.index = i
     f.rows = {}
     f.offset = 0
+    C.Frame(f)
+    C.Header(f)
 
-    -- the title strip drags the window (unless locked); a click opens the mode menu
+    -- the header drags the window (unless locked); a click opens the mode menu
     local handle = f.dragHandle
     handle:SetScript("OnDragStart", function() if not S("lock", false) then f:StartMoving() end end)
     handle:SetScript("OnClick", function() C:ModeMenu(f) end)
     tip(handle, "Click to choose what this tab shows. Drag to move the window.")
     local arrow = f:CreateTexture(nil, "OVERLAY")
-    arrow:SetWidth(12)
-    arrow:SetHeight(12)
-    arrow:SetPoint("LEFT", f.title, "RIGHT", 1, -1)
-    arrow:SetTexture("Interface\\Buttons\\UI-ScrollBar-ScrollDownButton-Up")
+    arrow:SetWidth(9)
+    arrow:SetHeight(9)
+    arrow:SetPoint("LEFT", f.title, "RIGHT", 4, 0)
+    arrow:SetTexture(C.ART.arrow)
     f.arrow = arrow
 
-    local level = handle:GetFrameLevel() + 2
-    local gear = UI.GearButton(f, function() C:ToggleSettings(f) end, 14)
-    gear:SetPoint("RIGHT", f.titleBar, "RIGHT", -21, 0)
-    gear:SetFrameLevel(level)
+    -- the reset and cog: square buttons at the right end of the tab row
+    local gear = C.ToolButton(f, 20, C.ART.gear, function() C:ToggleSettings(f) end, "Settings")
+    gear:SetPoint("TOPRIGHT", f, "TOPRIGHT", -8, -18)
     f.gear = gear
-    local report = iconButton(f, 14, "Interface\\Icons\\INV_Scroll_03", function() C:ReportMenu(f, this) end, "Report to chat")
-    report:SetPoint("RIGHT", gear, "LEFT", -4, 0)
-    report:SetFrameLevel(level)
-    f.report = report
+    local reset = C.ToolButton(f, 20, C.ART.reset, function() C:Reset() end, "Reset all fights")
+    reset:SetPoint("RIGHT", gear, "LEFT", -4, 0)
+    f.reset = reset
 
     -- tabs
     f.tabOpts = {
@@ -251,28 +276,31 @@ local function makeWindow(i)
         onAdd = function() C:AddTab(f.index) end,
         onMenu = function(key, b) C:TabMenu(f.index, tonumber(key), b) end,
     }
-    local tabs = UI.Tabs(f, f.tabOpts)
-    tabs:SetPoint("TOPLEFT", f, "TOPLEFT", 6, -26)
+    f.tabOpts.height = 18
+    local tabs = C.ChromeTabs(UI.Tabs(f, f.tabOpts))
+    tabs:SetPoint("TOPLEFT", f, "TOPLEFT", ROW_X, -(C.HEADER_H + 5))
     f.tabs = tabs
 
-    -- column header: "Damage v   Share   Amount (DPS)"; click for the mode menu
+    -- column header on a slate strip: "Player   Share   Amount (DPS)"; click for the mode menu
     local header = CreateFrame("Button", nil, f)
-    header:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -45)
-    header:SetPoint("TOPRIGHT", f, "TOPRIGHT", -8, -45)
-    header:SetHeight(14)
+    header:SetPoint("TOPLEFT", f, "TOPLEFT", ROW_X, -(C.BAND_H + 2))
+    header:SetWidth(ROW_W)
+    header:SetHeight(12)
+    C.ColumnStrip(header)
     local hMode = header:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    hMode:SetPoint("LEFT", header, "LEFT", 0, 0)
-    UI.Font(hMode, 10, "OUTLINE")
+    hMode:SetPoint("LEFT", header, "LEFT", 23, 0)       -- over the names
+    UI.Font(hMode, 9, "")
+    hMode:SetTextColor(0.86, 0.80, 0.66, 1)
     shadowed(hMode)
     local hPct = header:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    hPct:SetPoint("RIGHT", header, "RIGHT", -86, 0)
-    UI.Font(hPct, 9, "OUTLINE")
-    hPct:SetTextColor(0.78, 0.78, 0.82, 1)
+    hPct:SetPoint("RIGHT", header, "RIGHT", -91, 0)
+    UI.Font(hPct, 9, "")
+    hPct:SetTextColor(0.86, 0.80, 0.66, 1)
     shadowed(hPct)
     local hVal = header:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    hVal:SetPoint("RIGHT", header, "RIGHT", 0, 0)
-    UI.Font(hVal, 9, "OUTLINE")
-    hVal:SetTextColor(0.78, 0.78, 0.82, 1)
+    hVal:SetPoint("RIGHT", header, "RIGHT", -5, 0)       -- over the numbers
+    UI.Font(hVal, 9, "")
+    hVal:SetTextColor(0.86, 0.80, 0.66, 1)
     shadowed(hVal)
     header:SetScript("OnClick", function() C:ModeMenu(f) end)
     tip(header, "Click to choose what this tab shows")
@@ -285,31 +313,53 @@ local function makeWindow(i)
     shadowed(empty)
     f.empty = empty
 
-    -- footer: the fight picker on the left, reset on the right
+    -- footer: the fight picker on the left, the report on the right
     local segBtn = CreateFrame("Button", nil, f)
-    segBtn:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 6, 4)
+    segBtn:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", ROW_X + 14, 5)
     segBtn:SetWidth(WIDTH - 40)
-    segBtn:SetHeight(14)
+    segBtn:SetHeight(12)
     local footer = segBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     footer:SetPoint("LEFT", segBtn, "LEFT", 3, 0)
     footer:SetJustifyH("LEFT")
-    UI.Font(footer, 9, "OUTLINE")
+    UI.Font(footer, 9, "")
     footer:SetTextColor(0.85, 0.85, 0.88, 1)
     shadowed(footer)
     segBtn:SetScript("OnClick", function() C:SegmentMenu(f) end)
     tip(segBtn, "Click to pick a fight: current, overall or an earlier one")
     f.footer, f.segBtn = footer, segBtn
 
-    local reset = CreateFrame("Button", nil, f)
-    reset:SetWidth(14)
-    reset:SetHeight(14)
-    reset:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -7, 5)
-    reset:SetNormalTexture("Interface\\Buttons\\UI-RotationLeft-Button-Up")
-    reset:SetPushedTexture("Interface\\Buttons\\UI-RotationLeft-Button-Down")
-    reset:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square")
-    reset:SetScript("OnClick", function() C:Reset() end)
-    tip(reset, "Reset all fights")
-    f.reset = reset
+    local report = iconButton(f, 12, "Interface\\Icons\\INV_Scroll_03", function() C:ReportMenu(f, this) end, "Report to chat")
+    report:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -(ROW_X + 14), 5)
+    f.report = report
+
+    -- the rows sit recessed: an area over them carries the inner shadow (sized in RenderWindow)
+    local area = CreateFrame("Frame", nil, f)
+    area:SetPoint("TOPLEFT", f, "TOPLEFT", ROW_X, -TOP)
+    area:SetWidth(ROW_W)
+    area:SetHeight(18)
+    f.rowsArea = area
+    f.inner = C.InnerShadow(area)
+
+    -- the gold scrollbar, shown when there are more players than rows
+    local scroll = C.Scrollbar(f, function(frac)
+        f.offset = math.floor(frac * (f.scrollMax or 0) + 0.5)
+        C:RenderWindow(f.index)
+    end)
+    scroll:SetPoint("TOPLEFT", f, "TOPLEFT", ROW_X + ROW_W + 3, -TOP)
+    f.scroll = scroll
+    -- and its two arrow buttons under it: one row up or down
+    local function step(d)
+        return function()
+            f.offset = f.offset + d
+            C:RenderWindow(f.index)
+        end
+    end
+    local up = C.ArtButton(f, C.SCROLL_W, C.ART.up, step(-1), "Scroll up")
+    up:SetPoint("TOPLEFT", scroll, "BOTTOMLEFT", 0, -2)
+    local down = C.ArtButton(f, C.SCROLL_W, C.ART.down, step(1), "Scroll down")
+    down:SetPoint("TOPLEFT", up, "BOTTOMLEFT", 0, -2)
+    up:Hide(); down:Hide()
+    f.upBtn, f.downBtn = up, down
 
     f:EnableMouseWheel(true)
     f:SetScript("OnMouseWheel", function()
@@ -372,7 +422,7 @@ function C:RefreshTabs(i)
     local list = {}
     for _, t in ipairs(w.tabs) do tinsert(list, { key = tostring(t.id), label = tabLabel(t) }) end
     -- the tabs share the width of the window (less the "+" tab)
-    f.tabOpts.maxWidth = math.min(84, floor((WIDTH - 12 - 21) / getn(list)) - 1)
+    f.tabOpts.maxWidth = math.min(64, floor((WIDTH - 2 * ROW_X - 21 - 50) / getn(list)) - 1)
     f.tabs:SetTabs(list)
     f.tabs:Select(tostring(activeTab(w).id), true)
 end
@@ -400,39 +450,48 @@ function C:Render()
     if self.RenderDetail and Chronicle_Detail and Chronicle_Detail:IsShown() then self:RenderDetail() end
 end
 
-local function rowText(m, item, total, dur, showDps, offset)
+-- "12,453" -> per second unit for a mode
+local function perUnit(m)
+    if m.value == "heal" then return "HPS" end
+    if m.value == "dmg" then return "DPS" end
+    return "/s"
+end
+
+-- 25.58%: the share in a row, two decimals
+local function share(part, whole)
+    if not whole or whole <= 0 then return "0.00%" end
+    return string.format("%.2f%%", part / whole * 100)
+end
+
+-- The one right-hand text of a row: "12,453 (385 DPS) 25.58%" and its kin.
+local function rowText(m, item, total, dur, showDps)
     if item.death then
         local d = item.death
         local b = d.blow
-        return W.Clock(d.t), b and ((b.abil or "Melee") .. " " .. Num(-b.amt)) or "-"
+        return "", (b and ((b.abil or "Melee") .. " " .. Num(-b.amt)) or "-") .. "   " .. W.Clock(d.t)
     elseif item.aura then
-        return "", W.Clock(item.total) .. "  " .. pct(item.total, dur)
+        return "", W.Clock(item.total) .. "  " .. share(item.total, dur)
     elseif m.key == "overheal" then
-        return (item.known and item.known > 0) and pct(item.total, item.known) or "?", Num(item.total)
+        return "", Num(item.total) .. "  " .. ((item.known and item.known > 0) and share(item.total, item.known) or "?")
     elseif m.count then
-        return pct(item.total, total), tostring(item.total)
+        return "", tostring(item.total) .. "  " .. share(item.total, total)
     elseif m.key == "power" then
-        return pct(item.total, total), Num(item.total) .. (item.ptype and (" " .. strlower(item.ptype)) or "")
+        return "", Num(item.total) .. (item.ptype and (" " .. strlower(item.ptype)) or "") .. "  " .. share(item.total, total)
     elseif m.rate and showDps then
+        local per = Num(item.perSec) .. " " .. perUnit(m)
         if m.sortRate then
-            return pct(item.total, total), Num(item.perSec) .. " (" .. Num(item.total) .. ")"
+            return "", per .. " (" .. Num(item.total) .. ")  " .. share(item.total, total)
         end
-        return pct(item.total, total), Num(item.total) .. " (" .. Num(item.perSec) .. ")"
+        return "", Num(item.total) .. " (" .. per .. ")  " .. share(item.total, total)
     end
-    return pct(item.total, total), Num(item.total)
+    return "", Num(item.total) .. "  " .. share(item.total, total)
 end
 
+-- Column strip: "Player" on the left, the mode on the right.
 local function headerTexts(m, showDps)
-    if m.special == "deaths" then return "Time", "Killing blow" end
+    if m.special == "deaths" then return "", "Killing blow" end
     if m.special == "auras" then return "", "Uptime" end
-    if m.key == "overheal" then return "Of heals", "Amount" end
-    if m.count then return "Share", "Count" end
-    if m.rate and showDps then
-        local per = (m.value == "heal") and "HPS" or ((m.value == "dmg") and "DPS" or "per sec")
-        if m.sortRate then return "Share", per .. " (Amount)" end
-        return "Share", "Amount (" .. per .. ")"
-    end
-    return "Share", "Amount"
+    return "", m.label
 end
 
 function C:RenderWindow(i)
@@ -448,14 +507,14 @@ function C:RenderWindow(i)
     local classColors = S("classColors", true) ~= false
     local showRank = S("showRank", false)
 
-    f.title:SetText(m.key == "dmg" and "Meters" or ("Meters - " .. m.label))
+    f.title:SetText(m.label)
     if f.icon then f.icon:SetTexture(m.icon) end
-    f.hMode:SetText(m.label .. " |cff808080v|r")
+    f.hMode:SetText(m.special == "auras" and "Aura" or "Player")
     local hp, hv = headerTexts(m, showDps)
     f.hPct:SetText(hp)
     f.hVal:SetText(hv)
 
-    local maxRows = floor(clamp(S("maxRows", 5), 1, MAX_ROWS))
+    local maxRows = floor(clamp(S("maxRows", 8), 1, MAX_ROWS))
     local n = getn(list)
     if f.offset > n - maxRows then f.offset = n - maxRows end
     if f.offset < 0 then f.offset = 0 end
@@ -471,7 +530,7 @@ function C:RenderWindow(i)
         local row = f.rows[r] or makeRow(f, r)
         if row.styledH ~= h then styleRow(row) end
         row:ClearAllPoints()
-        row:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -TOP - (r - 1) * (h + GAP))
+        row:SetPoint("TOPLEFT", f, "TOPLEFT", ROW_X, -TOP - (r - 1) * (h + GAP))
         local item = list[f.offset + r]
         if item then
             shown = r
@@ -480,9 +539,9 @@ function C:RenderWindow(i)
             if item.aura then
                 if item.harmful then cr, cg, cb = 0.72, 0.22, 0.20 else cr, cg, cb = 0.26, 0.62, 0.30 end
             elseif classColors then
-                cr, cg, cb = UI.ClassColor(token)
+                cr, cg, cb = C.BarColor(token)
             end
-            row:SetColor(cr, cg, cb, 0.9)
+            row:SetColor(cr, cg, cb, C.FILL_ALPHA)
             if item.aura then
                 row:SetFraction(item.total / (dur > 0 and dur or 1))
             elseif item.death then
@@ -494,12 +553,12 @@ function C:RenderWindow(i)
             end
             row.icon:SetTexture(item.icon or UI.CLASS_ICONS[token or ""] or UI.UNKNOWN_ICON)
             row.left:SetText((showRank and ((f.offset + r) .. ". ") or "") .. item.name)
-            row.left:SetTextColor(1, 1, 1, 1)
+            row.left:SetTextColor(C.NAME_COLOR[1], C.NAME_COLOR[2], C.NAME_COLOR[3], 1)
             local mid, right = rowText(m, item, total, dur, showDps)
             row.mid:SetText(mid)
             row.mid:SetTextColor(0.92, 0.92, 0.95, 1)
             row.right:SetText(right)
-            row.right:SetTextColor(1, 1, 1, 1)
+            row.right:SetTextColor(C.NUM_COLOR[1], C.NUM_COLOR[2], C.NUM_COLOR[3], 1)
             row.item = item
             row.playerName = (not item.aura and not item.death) and item.name or nil
             row.mode, row.segSel, row.segKind = m.key, tab.seg, (source == "server") and "server" or segKind
@@ -520,7 +579,21 @@ function C:RenderWindow(i)
         f.empty:Hide()
     end
     local rowsH = (shown > 0 and shown or 1) * (h + GAP)
-    f:SetHeight(TOP + rowsH + 18)
+    f:SetHeight(TOP + rowsH + 22)
+    if f.rowsArea then f.rowsArea:SetHeight(math.max(1, rowsH - GAP)) end
+    -- the scrollbar: only when the list is longer than the rows
+    f.scrollMax = n - maxRows
+    if f.scroll then
+        if f.scrollMax > 0 then
+            f.scroll:SetHeight(math.max(3 * C.SCROLL_W, rowsH - GAP - 2 * (C.SCROLL_W + 2)))
+            f.scroll:Show()
+            f.upBtn:Show(); f.downBtn:Show()
+            f.scroll:SetKnob(f.offset / f.scrollMax)
+        else
+            f.scroll:Hide()
+            f.upBtn:Hide(); f.downBtn:Hide()
+        end
+    end
 
     local text
     if source == "server" then
@@ -846,13 +919,15 @@ function C:BuildSheet(f)
     local function getOn(k, d) return function() return S(k, d) and true or false end end
     local function set(k) return function(v) C:Set(k, v) end end
     sh:AddHeader("Bars")
-    sh.rowsSlider = sh:AddSlider("Rows", 1, MAX_ROWS, 1, get("maxRows", 5), set("maxRows"))
+    sh.rowsSlider = sh:AddSlider("Rows", 1, MAX_ROWS, 1, get("maxRows", 8), set("maxRows"))
     sh.heightSlider = sh:AddSlider("Bar height", 12, 28, 1, get("barHeight", 18), set("barHeight"), "%d px")
     sh.fontChoice = sh:AddChoice("Text size", FONT_CHOICES, get("fontSize", 10), set("fontSize"))
-    sh.textureChoice = sh:AddChoice("Bar texture", C.TEXTURES, get("barTexture", "glossy"), set("barTexture"))
+    sh.textureChoice = sh:AddChoice("Bar texture", C.TEXTURES, get("barTexture", "bronze"), set("barTexture"))
+    sh.paletteChoice = sh:AddChoice("Class colours", C.PALETTES, get("classPalette", "meters"), set("classPalette"))
+    sh.rowFontChoice = sh:AddChoice("Row font", C.ROW_FONTS, get("rowFont", "rounded"), set("rowFont"))
     sh.classSwitch = sh:AddSwitch("Class colours", "Colour each bar by the player's class.", getOn("classColors", true), set("classColors"))
     sh:AddHeader("Numbers")
-    sh.numberChoice = sh:AddChoice("Number format", NUMBER_CHOICES, get("numberFormat", "short"), set("numberFormat"))
+    sh.numberChoice = sh:AddChoice("Number format", NUMBER_CHOICES, get("numberFormat", "full"), set("numberFormat"))
     sh.dpsSwitch = sh:AddSwitch("Show per second", "DPS and HPS next to each total.", getOn("showDps", true), set("showDps"))
     sh.rankSwitch = sh:AddSwitch("Rank numbers", "Put 1. 2. 3. in front of the names.", getOn("showRank", false), set("showRank"))
     sh:AddHeader("Windows")
@@ -1133,8 +1208,8 @@ W:RegisterSchema(ID, {
     title = "Meters - Damage, Healing & More",
     desc = "Damage, healing, deaths, interrupts, dispels and more for you, your group and your pets, fight by fight. Uses the realm's numbers when it sends them, otherwise your own combat log. The gear on each window has the same settings.",
     defaults = {
-        maxRows = 5, showDps = true, classColors = true, inspectOnClick = true,
-        barHeight = 18, fontSize = 10, barTexture = "glossy", numberFormat = "short",
+        maxRows = 8, showDps = true, classColors = true, inspectOnClick = true,
+        barHeight = 18, fontSize = 10, barTexture = "bronze", numberFormat = "full", classPalette = "meters", rowFont = "rounded",
         autoHide = false, lock = false, scale = 1, reportLines = 5, showRank = false,
     },
     options = {
@@ -1146,6 +1221,8 @@ W:RegisterSchema(ID, {
         { key = "showRank", label = "Rank numbers", sub = "Put 1. 2. 3. in front of the names." },
         { key = "numberFormat", label = "Number format", type = "choice", choices = NUMBER_CHOICES },
         { key = "barTexture", label = "Bar texture", type = "choice", choices = C.TEXTURES },
+        { key = "classPalette", label = "Class colours", type = "choice", choices = C.PALETTES },
+        { key = "rowFont", label = "Row font", type = "choice", choices = C.ROW_FONTS },
         { key = "fontSize", label = "Text size", type = "choice", choices = FONT_CHOICES },
         { key = "reportLines", label = "Lines in a report", type = "choice", choices = LINE_CHOICES },
         { key = "maxRows", label = "Rows", type = "slider", min = 1, max = MAX_ROWS, step = 1, fmt = "%d" },
