@@ -1,5 +1,5 @@
 source: Open Vanilla
-commit: 126b5f806697b7d4a88e18532362007cd0fd05dc
-subject: duels_up.sh: SQL as the database container's own root user; update starts realmd and shows the setup token
+commit: 4ed821672035f69f25c23293d24a952c912fbbc7
+subject: duels_up.sh: declare the live game data volume as external in the override
 paths: Data, workshop, tools/workshop_*.py, tools/workshop_scan.lua, tools/transmog, tools/addon_shots.py, tools/Make_Addon_Shots.bat, tools/openvanilla_addon_devloader.js, docs/CLASSIC_PLUS_ADDONS.md, docs/CLASSIC_PLUS_ARCHITECTURE.md, docs/ADDON_COMPAT_REPORT.md, docs/ARMORY.md, docs/ARMORY_GUILDS.md, docs/STREAMS.md
 Made by dev/sync_repos.py. Edit the source, not this copy.
