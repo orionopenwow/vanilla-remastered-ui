@@ -1,5 +1,5 @@
 source: Open Vanilla
-commit: 186819ad5fb0653caca0a3e05fc9eab86e48e696
-subject: Release 1.46.0
+commit: 54f8a5b18d597d5dd3b2ab300494d6aba60db745
+subject: a
 paths: Data, workshop, tools/workshop_*.py, tools/workshop_scan.lua, tools/transmog, tools/addon_shots.py, tools/Make_Addon_Shots.bat, tools/openvanilla_addon_devloader.js, docs/CLASSIC_PLUS_ADDONS.md, docs/CLASSIC_PLUS_ARCHITECTURE.md, docs/ADDON_COMPAT_REPORT.md, docs/ARMORY.md, docs/ARMORY_GUILDS.md, docs/STREAMS.md
 Made by dev/sync_repos.py. Edit the source, not this copy.
